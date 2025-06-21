@@ -1,10 +1,12 @@
 {
   "name": "taskcalendar",
   "private": true,
+  "description": "A task and calendar manager built with React and Electron.",
+  "author": "Hayden Howell",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "start": "electron-forge start",
+    "start": "electron .",
     "nw": "nwbuild --platforms win64 --buildDir dist/ ./build",
     "dev": "vite",
     "build": "vite build",
@@ -12,15 +14,10 @@
     "package": "electron-forge package",
     "lint": "eslint .",
     "preview": "vite preview",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "dist": "electron-builder"
   },
-  "build": {
-    "appId": "com.example.todolist",
-    "win": {
-      "target": "nsis",
-      "icon": "src/assets/icon.ico"
-    }
-  },
+
   "dependencies": {
     "@tailwindcss/vite": "^4.1.7",
     "date-fns": "^4.1.0",
@@ -32,15 +29,43 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
+    "@tailwindcss/postcss": "^4.1.10",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
+    "autoprefixer": "^10.4.21",
+    "electron": "^36.5.0",
+    "electron-builder": "^26.0.12",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
-    "vite": "^6.3.5",
-    "electron-prebuilt-compile": "36.3.2"
+    "vite": "^6.3.5"
   },
-  "main": "C:\\Users\\Hhowe\\WebstormProjects\\taskcalendar\\src\\main.jsx"
+  "build": {
+    "appId": "com.example.todolist",
+    "productName": "Task Calendar",
+    "files": [
+      "dist/**/*",
+      "electron.js",
+      "main.js",
+      "preload.js"
+    ],
+    "directories": {
+      "buildResources": "assets",
+      "output": "build"
+
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "sign": false
+  },
+
+
+
+
+  "main": "main.js"
+
 }

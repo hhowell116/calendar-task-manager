@@ -1,5 +1,10 @@
 import { format, addDays, isToday, isSameDay } from 'date-fns'
 
+const today = new Date()
+console.log(format(today, 'yyyy-MM-dd'))
+console.log('Is today?', isToday(today))
+console.log('Is same day?', isSameDay(today, new Date()))
+
 export const formatDateKey = (date) => format(date, 'yyyy-MM-dd')
 
 export const getWeekDates = (date) => {
