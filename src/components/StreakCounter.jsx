@@ -1,15 +1,54 @@
 import { useState, useEffect } from 'react';
-import { format, isYesterday } from 'date-fns';
+import { format, isYesterday, isToday } from 'date-fns';
 import useLocalStorage from '../hooks/useLocalStorage';
 
 export default function StreakCounter({ timeLeft }) {
     const [streak, setStreak] = useLocalStorage('streak', 0);
     const [lastStreakDate, setLastStreakDate] = useLocalStorage('lastStreakDate', null);
     const [manualStreak, setManualStreak] = useState(streak);
-    const [showManualInput, setShowManualInput] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
 
-    // Format time for display
+    // Check streak validation at midnight
+    useEffect(() => {
+        if (timeLeft <= 0) {
+            validateStreak();
+        }
+    }, [timeLeft]);
+
+    const validateStreak = () => {
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayKey = format(yesterday, 'yyyy-MM-dd');
+
+        // Check if we already validated today
+        if (lastStreakDate === today) return;
+
+        // Get all recurring tasks
+        const recurringTasks = JSON.parse(localStorage.getItem('calendarTasks')) || [];
+        const completedToday = JSON.parse(localStorage.getItem('completedTasks')) || []
+            .filter(task => task.completedOnDate === yesterdayKey);
+
+        // Check if all recurring tasks were completed yesterday
+        const allCompleted = recurringTasks.length > 0 &&
+            recurringTasks.every(task =>
+                completedToday.some(completed => completed.id === task.id)
+            );
+
+        if (allCompleted) {
+            // Only increment if yesterday was consecutive
+            const newStreak = lastStreakDate && isYesterday(new Date(lastStreakDate))
+                ? streak + 1
+                : 1;
+            setStreak(newStreak);
+            setLastStreakDate(today);
+        } else if (lastStreakDate && !isYesterday(new Date(lastStreakDate))) {
+            // Reset if missed a day
+            setStreak(0);
+        }
+    };
+
+    // Format time display
     const formatTime = (seconds) => {
         const hrs = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
@@ -17,7 +56,7 @@ export default function StreakCounter({ timeLeft }) {
         return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // Manual streak adjustment
+    // Manual editing functions
     const handleManualStreakChange = (e) => {
         const value = Math.max(0, parseInt(e.target.value) || 0);
         setManualStreak(value);
@@ -25,40 +64,15 @@ export default function StreakCounter({ timeLeft }) {
 
     const saveManualStreak = () => {
         setStreak(manualStreak);
-        if (manualStreak > 0) {
-            setLastStreakDate(format(new Date(), 'yyyy-MM-dd'));
-        } else {
-            setLastStreakDate(null);
-        }
+        setLastStreakDate(manualStreak > 0 ? format(new Date(), 'yyyy-MM-dd') : null);
         setIsEditMode(false);
     };
 
-    // Reset streak manually
     const resetStreak = () => {
         setStreak(0);
         setLastStreakDate(null);
         setManualStreak(0);
         setIsEditMode(false);
-    };
-
-    // Check if streak should be incremented
-    const checkStreak = (completedAllTasks) => {
-        const today = format(new Date(), 'yyyy-MM-dd');
-
-        if (completedAllTasks) {
-            if (lastStreakDate !== today) {
-                const newStreak = lastStreakDate && isYesterday(new Date(lastStreakDate))
-                    ? streak + 1
-                    : 1;
-                setStreak(newStreak);
-                setLastStreakDate(today);
-                return true;
-            }
-        } else if (lastStreakDate && !isYesterday(new Date(lastStreakDate))) {
-            setStreak(0);
-            return false;
-        }
-        return false;
     };
 
     return (

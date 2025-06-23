@@ -13,7 +13,7 @@ import {
     isBefore,
     isYesterday
 } from 'date-fns';
-import { FiPlus, FiCheck, FiChevronLeft, FiChevronRight, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiCheck, FiChevronLeft, FiChevronRight, FiTrash2, FiEdit2 } from 'react-icons/fi';
 import useLocalStorage from '../hooks/useLocalStorage';
 import StreakCounter from './StreakCounter';
 
@@ -27,9 +27,11 @@ export default function CalendarView() {
         Monday: '', Tuesday: '', Wednesday: '', Thursday: '', Friday: '',
         Saturday: '', Sunday: ''
     });
+    const [batchTaskText, setBatchTaskText] = useState('');
+    const [editingTask, setEditingTask] = useState(null);
     const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
+    const [backgroundImage, setBackgroundImage] = useLocalStorage('backgroundImage', '');
 
-    // Calculate time left until midnight
     function calculateTimeLeft() {
         const now = new Date();
         const midnight = new Date();
@@ -37,7 +39,6 @@ export default function CalendarView() {
         return Math.floor((midnight - now) / 1000);
     }
 
-    // Timer effect with proper streak validation
     useEffect(() => {
         const timer = setInterval(() => {
             const newTimeLeft = calculateTimeLeft();
@@ -51,24 +52,19 @@ export default function CalendarView() {
         return () => clearInterval(timer);
     }, [tasks, completedTasks]);
 
-    // Properly validate streak at midnight
     const validateStreak = () => {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         yesterday.setHours(0, 0, 0, 0);
         const yesterdayKey = format(yesterday, 'yyyy-MM-dd');
 
-        // Get all recurring tasks
         const recurringTasks = tasks.filter(task => task.isRecurring);
-
-        // Get tasks actually completed yesterday
         const yesterdayCompleted = completedTasks.filter(task => {
             const taskDate = new Date(task.completedDate);
             taskDate.setHours(0, 0, 0, 0);
             return taskDate.getTime() === yesterday.getTime();
         });
 
-        // Check if all recurring tasks were completed yesterday
         const allCompleted = recurringTasks.length > 0 &&
             recurringTasks.every(task =>
                 yesterdayCompleted.some(completed => completed.id === task.id)
@@ -78,23 +74,20 @@ export default function CalendarView() {
         const lastStreakDate = localStorage.getItem('lastStreakDate');
 
         if (allCompleted) {
-            // Only increment if we haven't already today
             if (lastStreakDate !== yesterdayKey) {
                 const newStreak = currentStreak + 1;
                 localStorage.setItem('streak', newStreak.toString());
                 localStorage.setItem('lastStreakDate', yesterdayKey);
-                window.dispatchEvent(new Event('storage')); // Trigger update
+                window.dispatchEvent(new Event('storage'));
             }
         } else {
-            // Reset streak if not all tasks completed
             if (lastStreakDate !== yesterdayKey && recurringTasks.length > 0) {
                 localStorage.setItem('streak', '0');
-                window.dispatchEvent(new Event('storage')); // Trigger update
+                window.dispatchEvent(new Event('storage'));
             }
         }
     };
 
-    // Format time for display
     const formatTime = (seconds) => {
         const hrs = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
@@ -102,12 +95,16 @@ export default function CalendarView() {
         return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    // Navigation
     const prevMonth = () => setCurrentDate(addMonths(currentDate, -1));
     const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
     const goToToday = () => setCurrentDate(new Date());
 
-    // Add recurring task
+    const canAddToDay = (day) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return !isBefore(day, today);
+    };
+
     const addRecurringTask = (day) => {
         if (newTaskTexts[day].trim()) {
             const newTask = {
@@ -122,7 +119,34 @@ export default function CalendarView() {
         }
     };
 
-    // Complete task
+    const addBatchTasks = () => {
+        if (batchTaskText.trim()) {
+            const allDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const newTasks = allDays.map(day => ({
+                id: `${Date.now()}-${day}`,
+                text: batchTaskText,
+                day,
+                isRecurring: true,
+                created: new Date().toISOString()
+            }));
+            setTasks([...tasks, ...newTasks]);
+            setBatchTaskText('');
+        }
+    };
+
+    const updateTask = (taskId, updates) => {
+        setTasks(tasks.map(task =>
+            task.id === taskId ? { ...task, ...updates } : task
+        ));
+        setEditingTask(null);
+    };
+
+    const deleteTask = (taskId) => {
+        setTasks(tasks.filter(t => t.id !== taskId));
+        setCompletedTasks(completedTasks.filter(ct => ct.id !== taskId));
+        setExclusions(exclusions.filter(ex => ex.taskId !== taskId));
+    };
+
     const completeTask = (task, date = new Date()) => {
         const completion = {
             ...task,
@@ -136,7 +160,6 @@ export default function CalendarView() {
         }
     };
 
-    // Remove task from specific day only
     const removeFromDay = (task, day) => {
         const dateKey = format(day, 'yyyy-MM-dd');
 
@@ -153,14 +176,12 @@ export default function CalendarView() {
         }
     };
 
-    // Get days for the month grid
     const getMonthDays = () => {
         const start = startOfWeek(startOfMonth(currentDate));
         const end = endOfWeek(endOfMonth(currentDate));
         return eachDayOfInterval({ start, end });
     };
 
-    // Get tasks for a specific day
     const getDayTasks = (day) => {
         const dayName = format(day, 'EEEE');
         const dateKey = format(day, 'yyyy-MM-dd');
@@ -189,7 +210,6 @@ export default function CalendarView() {
         return allTasks;
     };
 
-    // Determine day color
     const getDayColor = (day) => {
         if (isToday(day)) return 'bg-blue-900 bg-opacity-50';
 
@@ -204,14 +224,39 @@ export default function CalendarView() {
             if (completedCount > 0) return 'bg-yellow-900 bg-opacity-30';
             return 'bg-red-900 bg-opacity-30';
         }
-
         if (completedCount === totalTasks) return 'bg-green-900 bg-opacity-30';
         if (completedCount > 0) return 'bg-yellow-900 bg-opacity-30';
         return 'bg-gray-800';
     };
 
     return (
-        <div className="bg-black text-white h-screen p-6 overflow-y-auto">
+        <div className="bg-black text-white h-screen p-6 overflow-y-auto"
+             style={{
+                 backgroundImage: backgroundImage ? `url(${backgroundImage})` : '',
+                 backgroundSize: 'cover',
+                 backgroundPosition: 'center',
+                 backgroundBlendMode: 'overlay'
+             }}
+        >
+            <div className="absolute top-4 right-4">
+                <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                setBackgroundImage(event.target.result);
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    }}
+                    className="hidden"
+                    id="background-upload"
+                />
+            </div>
+
             <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
                     <button onClick={prevMonth} className="p-2 hover:bg-gray-800 rounded-full">
@@ -239,33 +284,66 @@ export default function CalendarView() {
             {showCalendarTasks ? (
                 <div className="bg-gray-900 rounded-lg p-6 mb-6">
                     <h3 className="text-xl font-semibold mb-4">Weekly Recurring Tasks</h3>
+
+                    <div className="mb-6 p-4 bg-gray-800 rounded-lg">
+                        <h4 className="font-medium mb-2">Add to Every Day</h4>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={batchTaskText}
+                                onChange={(e) => setBatchTaskText(e.target.value)}
+                                className="flex-1 bg-gray-700 text-white px-3 py-2 rounded"
+                                placeholder="Enter task for all days"
+                            />
+                            <button
+                                onClick={addBatchTasks}
+                                className="bg-white text-black px-4 py-2 rounded"
+                            >
+                                <FiPlus /> Add
+                            </button>
+                        </div>
+                    </div>
+
                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
                         <div key={day} className="mb-4">
                             <div className="flex items-center justify-between mb-2">
                                 <h4 className="font-medium">{day}</h4>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={newTaskTexts[day]}
-                                        onChange={(e) => setNewTaskTexts({...newTaskTexts, [day]: e.target.value})}
-                                        onKeyDown={(e) => e.key === 'Enter' && addRecurringTask(day)}
-                                        className="bg-gray-800 text-white px-3 py-1 rounded flex-1"
-                                        placeholder={`Add ${day} task`}
-                                    />
-                                    <button
-                                        onClick={() => addRecurringTask(day)}
-                                        className="bg-white text-black p-1 rounded"
-                                    >
-                                        <FiPlus />
-                                    </button>
-                                </div>
+                                {canAddToDay(new Date()) && (
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={newTaskTexts[day]}
+                                            onChange={(e) => setNewTaskTexts({...newTaskTexts, [day]: e.target.value})}
+                                            onKeyDown={(e) => e.key === 'Enter' && addRecurringTask(day)}
+                                            className="bg-gray-800 text-white px-3 py-1 rounded flex-1"
+                                            placeholder={`Add ${day} task`}
+                                        />
+                                        <button
+                                            onClick={() => addRecurringTask(day)}
+                                            className="bg-white text-black p-1 rounded"
+                                        >
+                                            <FiPlus />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="space-y-1">
                                 {tasks
                                     .filter(task => task.day === day)
                                     .map(task => (
                                         <div key={task.id} className="group flex items-center justify-between bg-gray-800 p-2 rounded">
-                                            <span className="flex-1">{task.text}</span>
+                                            {editingTask?.id === task.id ? (
+                                                <input
+                                                    type="text"
+                                                    value={editingTask.text}
+                                                    onChange={(e) => setEditingTask({...editingTask, text: e.target.value})}
+                                                    onKeyDown={(e) => e.key === 'Enter' && updateTask(task.id, {text: e.target.value})}
+                                                    className="flex-1 bg-gray-700 text-white px-2 rounded"
+                                                    autoFocus
+                                                />
+                                            ) : (
+                                                <span className="flex-1">{task.text}</span>
+                                            )}
                                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button
                                                     onClick={() => completeTask(task)}
@@ -274,8 +352,23 @@ export default function CalendarView() {
                                                 >
                                                     <FiCheck />
                                                 </button>
+                                                {editingTask?.id === task.id ? (
+                                                    <button
+                                                        onClick={() => updateTask(task.id, {text: editingTask.text})}
+                                                        className="text-blue-500 hover:text-blue-400"
+                                                    >
+                                                        <FiCheck />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => setEditingTask({...task})}
+                                                        className="text-blue-500 hover:text-blue-400"
+                                                    >
+                                                        <FiEdit2 />
+                                                    </button>
+                                                )}
                                                 <button
-                                                    onClick={() => setTasks(tasks.filter(t => t.id !== task.id))}
+                                                    onClick={() => deleteTask(task.id)}
                                                     className="text-red-500 hover:text-red-400"
                                                     title="Delete task permanently"
                                                 >
@@ -305,23 +398,29 @@ export default function CalendarView() {
                             return (
                                 <div
                                     key={day.toString()}
-                                    className={`min-h-32 p-1 border border-gray-800 rounded-lg ${dayColor} ${!isCurrentMonth ? 'opacity-50' : ''}`}
+                                    className={`min-h-36 p-1 border border-gray-800 rounded-lg ${dayColor} ${!isCurrentMonth ? 'opacity-50' : ''}`}
+                                    title={dayTasks.map(t => t.text).join('\n')}
                                 >
                                     <div className={`text-right p-1 ${isToday(day) ? 'font-bold text-blue-300' : ''}`}>
                                         {format(day, 'd')}
+                                        {dayTasks.length > 0 && (
+                                            <span className="ml-1 text-xs">
+                                                ({dayTasks.filter(t => t.completed || t.completedDate).length}/{dayTasks.length})
+                                            </span>
+                                        )}
                                     </div>
-                                    <div className="space-y-1 max-h-20 overflow-y-auto">
+                                    <div className="space-y-1 max-h-24 overflow-y-auto">
                                         {dayTasks.map(task => (
                                             <div
                                                 key={task.id + (task.completedOnDate || '')}
-                                                className={`text-xs p-1 rounded flex items-center justify-between ${
+                                                className={`text-xs p-1 rounded flex items-center justify-between group ${
                                                     task.completed || task.completedDate
                                                         ? 'line-through bg-green-500 bg-opacity-30'
                                                         : 'bg-gray-800'
                                                 }`}
                                             >
-                                                <span>{task.text}</span>
-                                                <div className="flex gap-1">
+                                                <span className="truncate">{task.text}</span>
+                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     {!(task.completed || task.completedDate) ? (
                                                         <>
                                                             <button
